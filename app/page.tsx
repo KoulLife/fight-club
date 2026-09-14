@@ -30,6 +30,9 @@ import {
   Trash2,
   RotateCcw,
   ArrowLeft,
+  ShieldCheck,
+  Target,
+  Diamond,
 } from "lucide-react";
 
 interface FightProject {
@@ -44,13 +47,213 @@ interface FightProject {
 interface WorkoutItem {
   id: string;
   projectId: string;
+  category: "STAND-UP" | "GRAPPLING" | "HEALTH";
   title: string;
   completed: boolean;
 }
 
+interface CoachChoice {
+  id: string;
+  label: string;
+  badge: string;
+  badgeColor: "red" | "blue" | "amber" | "emerald";
+  coachReaction: string;
+  statEffect: string;
+  nextNodeId?: string;
+}
+
+interface CoachDialogNode {
+  id: string;
+  category: string;
+  coachSpeech: string;
+  choices: CoachChoice[];
+}
+
+const COACH_DIALOGS: Record<string, CoachDialogNode> = {
+  start: {
+    id: "start",
+    category: "CAMP CHECK-IN // 상태 진단",
+    coachSpeech:
+      "이봐, 들어왔군! 이번 경기까지 남은 시간이 얼마 없어. 오늘의 훈련 캠프는 어떻게 진행할 생각이지? 자네 눈빛을 보니 준비된 것 같기도 하고, 살짝 긴장한 것 같기도 하군.",
+    choices: [
+      {
+        id: "c1",
+        label: "오늘 목표 전부 완벽하게 박살내겠습니다. 강도 더 올려주십시오!",
+        badge: "투지(SPIRIT)",
+        badgeColor: "red",
+        statEffect: "🔥 파이팅 스피릿 +20% | 사기 진작",
+        coachReaction:
+          "하하! 그 패기, 아주 맘에 들어! 그래야 챔피언 벨트를 감을 자격이 있지. 하지만 흥분해서 페이스 잃으면 카운터 맞는다. 리스트의 목표를 하나씩 냉정하게 KO시켜라!",
+        nextNodeId: "intense_plan",
+      },
+      {
+        id: "c2",
+        label: "무리하지 않고 핵심 목표(알고리즘/배포) 위주로 냉정하게 타격하겠습니다.",
+        badge: "전술(TACTIC)",
+        badgeColor: "blue",
+        statEffect: "🧠 전술 집중도 +15% | 우선순위 최적화",
+        coachReaction:
+          "영리한 판단이야. 주먹을 100번 헛휘두르는 것보다, 정확한 타이밍의 잽과 카운터 스트레이트가 상대를 쓰러뜨리는 법이지. 오늘 우선순위 높은 과제부터 확실하게 끝내라.",
+        nextNodeId: "tactical_plan",
+      },
+      {
+        id: "c3",
+        label: "솔직히 어제 훈련 피로가 남아있습니다. 컨디션 조율과 리커버리가 필요합니다.",
+        badge: "체력(CONDITION)",
+        badgeColor: "amber",
+        statEffect: "🛡️ 회복력 +25% | 오버트레이닝 방지",
+        coachReaction:
+          "솔직하게 털어놓는 것도 프로의 기술이야. 오버트레이닝은 패배의 지름길이다. 오늘은 무리해서 목록을 늘리지 말고, 딱 2~3개 필수 목표만 타격하고 스트레칭 후 일찍 쉬어라.",
+        nextNodeId: "recovery_plan",
+      },
+      {
+        id: "c4",
+        label: "시합(마감일) 승리를 위한 코치님의 최종 게임 플랜을 브리핑해 주십시오.",
+        badge: "전략(STRATEGY)",
+        badgeColor: "emerald",
+        statEffect: "⚡ 결전 전략 숙지 완료 | 멘탈 무장",
+        coachReaction:
+          "좋아, 집중해라! 첫째, 자잘한 잡음에 한눈팔지 마라. 둘째, 막히는 문제가 생겨도 당황하지 말고 스텝 밟아 다음 과제로 넘어가. 셋째, 완주가 곧 챔피언십 판정승이다!",
+        nextNodeId: "game_plan",
+      },
+    ],
+  },
+  intense_plan: {
+    id: "intense_plan",
+    category: "TACTICAL FOCUS // 공세 집중",
+    coachSpeech:
+      "좋아, 피가 끓는 게 느껴지는군. 그럼 지금 당장 어떤 목표부터 전력으로 때려눕힐 텐가?",
+    choices: [
+      {
+        id: "c1_1",
+        label: "가장 어렵고 무거운 메인 이벤트 과제부터 정면 승부하겠습니다!",
+        badge: "정면돌파",
+        badgeColor: "red",
+        statEffect: "💥 넉아웃 파워 +15%",
+        coachReaction:
+          "그렇지! 턱 당기고 전진 스텝 밟아! 내가 코너에서 자네 등을 지키고 있을 테니 거침없이 때려박아라!",
+      },
+      {
+        id: "c1_2",
+        label: "스피드가 생명이니 가벼운 과제들부터 빠른 연타로 해치우겠습니다.",
+        badge: "스피드 콤보",
+        badgeColor: "amber",
+        statEffect: "⚡ 연타 적중률 +15%",
+        coachReaction:
+          "스피드 킬이지! 잽으로 가드를 흔들고 빈틈에 피니시를 꽂는 전술이다. 훌륭해, 지금 바로 시작해라!",
+      },
+      {
+        id: "c1_3",
+        label: "코치님, 다른 조언도 듣고 싶습니다.",
+        badge: "다른 대화",
+        badgeColor: "blue",
+        statEffect: "🔄 상태 재점검",
+        coachReaction: "그래, 언제든 물어봐라. 자네의 페이스를 찾는 게 최우선이다.",
+        nextNodeId: "start",
+      },
+    ],
+  },
+  tactical_plan: {
+    id: "tactical_plan",
+    category: "TACTICAL PLAN // 냉철한 경기 운영",
+    coachSpeech:
+      "전술을 세웠다면 링 위에서 절대 흔들리지 마라. 훈련 도중 예상치 못한 버그나 방해요소가 터지면 어떻게 대처할 텐가?",
+    choices: [
+      {
+        id: "c2_1",
+        label: "심호흡하고 계획된 우선순위 투두리스트만 냉정하게 밀고 가겠습니다.",
+        badge: "포커스 멘탈",
+        badgeColor: "blue",
+        statEffect: "🎯 집중 유지력 +20%",
+        coachReaction:
+          "바로 그거야. 챔피언은 관중의 야유나 상대의 클린치에 말려들지 않는 법이지. 계획대로만 쳐라.",
+      },
+      {
+        id: "c2_2",
+        label: "상황에 맞춰 유연하게 스텝을 바꾸며 침착하게 우회로를 찾겠습니다.",
+        badge: "유연한 대처",
+        badgeColor: "emerald",
+        statEffect: "🥋 카운터 능력 +15%",
+        coachReaction:
+          "물의 흐름처럼 움직여라! 막히면 다른 각도로 파고들면 그만이다. 아주 노련한 파이터의 태도야.",
+      },
+      {
+        id: "c2_3",
+        label: "코치님, 다른 조언도 듣고 싶습니다.",
+        badge: "다른 대화",
+        badgeColor: "amber",
+        statEffect: "🔄 상태 재점검",
+        coachReaction: "좋아, 다시 이야기해보자. 자네에게 필요한 건 전부 코치해주마.",
+        nextNodeId: "start",
+      },
+    ],
+  },
+  recovery_plan: {
+    id: "recovery_plan",
+    category: "RECOVERY ROUTINE // 체력 및 리셋",
+    coachSpeech:
+      "지혜로운 파이터는 쉴 때도 전략적으로 쉰다. 오늘 훈련 마친 후 수면과 식단 관리는 준비되어 있나?",
+    choices: [
+      {
+        id: "c3_1",
+        label: "단백질 식단 챙겨먹고 오늘 밤은 스마트폰 끄고 7시간 이상 푹 자겠습니다.",
+        badge: "딥 슬립 리커버리",
+        badgeColor: "emerald",
+        statEffect: "💤 피로 회복도 +30%",
+        coachReaction:
+          "완벽해! 잠자는 동안 근육과 뇌신경이 더 단단하게 재구축된다. 오늘 훈련 깔끔하게 끝내고 푹 쉬어라.",
+      },
+      {
+        id: "c3_2",
+        label: "가벼운 폼롤러 스트레칭과 시각화 명상으로 멘탈을 가다듬겠습니다.",
+        badge: "멘탈 디톡스",
+        badgeColor: "blue",
+        statEffect: "🧘 긴장 완화 +20%",
+        coachReaction:
+          "멘탈 리셋이야말로 5라운드 챔피언십 접전을 버티게 해주는 원동력이다. 몸의 긴장을 풀고 편안히 임해라.",
+      },
+      {
+        id: "c3_3",
+        label: "코치님, 다른 조언도 듣고 싶습니다.",
+        badge: "다른 대화",
+        badgeColor: "amber",
+        statEffect: "🔄 상태 재점검",
+        coachReaction: "그래, 언제든 편하게 말해라. 코칭 스테프는 항상 자네 편이다.",
+        nextNodeId: "start",
+      },
+    ],
+  },
+  game_plan: {
+    id: "game_plan",
+    category: "FINAL GAME PLAN // 결전의 각오",
+    coachSpeech:
+      "좋아. 머릿속으로 이미 상대의 주먹을 흘리고 승리의 벨트를 들어 올리는 자네의 모습을 시각화해봐라. 준비됐나?",
+    choices: [
+      {
+        id: "c4_1",
+        label: "네! 코치님 믿고 옥타곤으로 돌아가 오늘의 목표를 완수하겠습니다!",
+        badge: "전투 준비 완료",
+        badgeColor: "red",
+        statEffect: "🏆 승리 확신도 100%",
+        coachReaction:
+          "가서 증명해라! 옥타곤의 붉은 캔버스는 자네가 지배하는 무대다! 쇼타임이다!",
+      },
+      {
+        id: "c4_2",
+        label: "코치님, 다른 조언도 듣고 싶습니다.",
+        badge: "다른 대화",
+        badgeColor: "amber",
+        statEffect: "🔄 상태 재점검",
+        coachReaction: "그래, 부족한 부분이 있다면 얼마든지 채워주마.",
+        nextNodeId: "start",
+      },
+    ],
+  },
+};
+
 export default function CareerHubPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [activeTab, setActiveTab] = useState<"HOME" | "CAMP" | "FIGHTS" | "CAREER">("HOME");
+  const [activeTab, setActiveTab] = useState<"HOME" | "CAMP" | "FIGHTS" | "CAREER">("CAMP");
   const [isShaking, setIsShaking] = useState(false);
   const [punchFlash, setPunchFlash] = useState(false);
   const [fighterOutfit, setFighterOutfit] = useState<"MCGREGOR" | "TATTED" | "RASHGUARD">("MCGREGOR");
@@ -58,73 +261,146 @@ export default function CareerHubPage() {
   // Active Modal State: null | "FIGHT" | "COACH" | "HISTORY" | "CALENDAR" | "EVOLUTION" | "SOCIAL" | "SETTINGS"
   const [activeModal, setActiveModal] = useState<string | null>(null);
 
-  // Projects State (Project = Fight / 경기)
+  // Projects State (대단위 프로젝트)
   const [projects, setProjects] = useState<FightProject[]>([
     {
       id: "proj-1",
       badge: "MAIN EVENT",
-      title: "VS. CHAOXIANG TSANG (나태함 & 코테)",
-      shortName: "VS. TSANG (코테)",
+      title: "알고리즘 코딩테스트 집중 대비",
+      shortName: "알고리즘 코테",
       dDay: "D-7",
       color: "red",
     },
     {
       id: "proj-2",
       badge: "CO-MAIN",
-      title: "VS. SQLD 데이터 자격증 올패스",
-      shortName: "VS. SQLD",
+      title: "SQLD 데이터 자격증 취득",
+      shortName: "SQLD 자격증",
       dDay: "D-14",
       color: "amber",
     },
     {
       id: "proj-3",
       badge: "BOUT",
-      title: "VS. 백엔드 클라우드 무중단 배포",
-      shortName: "VS. 클라우드 배포",
+      title: "백엔드 클라우드 무중단 배포",
+      shortName: "클라우드 배포",
       dDay: "D-3",
       color: "blue",
+    },
+    {
+      id: "proj-4",
+      badge: "BOUT",
+      title: "피지컬 & 멘탈 컨디셔닝",
+      shortName: "피지컬 루틴",
+      dDay: "D-DAY",
+      color: "purple",
     },
   ]);
 
   const [activeProjectFilter, setActiveProjectFilter] = useState<string>("ALL");
+  const [selectedWorkoutId, setSelectedWorkoutId] = useState<string>("w-7");
+  const [campSubTab, setCampSubTab] = useState<"ATTRIBUTES" | "MOVES" | "PERKS">("ATTRIBUTES");
   const [newWorkoutTitle, setNewWorkoutTitle] = useState("");
   const [newWorkoutProjectId, setNewWorkoutProjectId] = useState<string>("proj-1");
+  const [isAddingWorkout, setIsAddingWorkout] = useState(false);
+  const [showCoachModal, setShowCoachModal] = useState(false);
+  const [currentDialogNode, setCurrentDialogNode] = useState<string>("start");
+  const [coachReaction, setCoachReaction] = useState<string | null>(null);
+  const [activeStatEffect, setActiveStatEffect] = useState<string | null>(null);
+  const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [newProjectTitle, setNewProjectTitle] = useState("");
   const [newProjectBadge, setNewProjectBadge] = useState<"MAIN EVENT" | "CO-MAIN" | "TITLE BOUT" | "BOUT">("BOUT");
   const [newProjectDDay, setNewProjectDDay] = useState("D-10");
 
-  // Workouts State (contained inside TRAINING CAMP modal & screen)
+  // Workouts State (Fighter Evolution 3-Column Attributes)
   const [workouts, setWorkouts] = useState<WorkoutItem[]>([
+    // 1. STAND-UP (실전 코딩 / 스프린트 / 개발)
     {
       id: "w-1",
       projectId: "proj-1",
-      title: "알고리즘 고난도 문제 2개 격파 (집중 스프린트)",
+      category: "STAND-UP",
+      title: "알고리즘 고난도 실전 문제 2개 타격 (집중 스프린트)",
       completed: false,
     },
     {
       id: "w-2",
-      projectId: "proj-1",
-      title: "동적 계획법(DP) & 그래프 탐색 핵심 오답 노트 정리",
-      completed: true,
+      projectId: "proj-3",
+      category: "STAND-UP",
+      title: "Docker Compose 환경 및 PostgreSQL 마이그레이션 검증",
+      completed: false,
     },
     {
       id: "w-3",
-      projectId: "proj-2",
-      title: "SQLD 2과목 SQL 기본 및 활용 모의고사 1회 풀이",
+      projectId: "proj-1",
+      category: "STAND-UP",
+      title: "UFC 커리어 모드 스타일 UI 인터랙션 리팩토링",
       completed: true,
     },
     {
       id: "w-4",
       projectId: "proj-3",
-      title: "Docker Compose 환경 및 PostgreSQL 마이그레이션 검증",
-      completed: false,
+      category: "STAND-UP",
+      title: "Next.js 서버 액션 성능 프로파일링 및 렌더 최적화",
+      completed: true,
     },
+    // 2. GRAPPLING (데이터 / 분석 / 지식 정리 / 자격증)
     {
       id: "w-5",
       projectId: "proj-1",
-      title: "UFC 커리어 모드 스타일 UI 인터랙션 리팩토링",
+      category: "GRAPPLING",
+      title: "동적 계획법(DP) & 그래프 탐색 핵심 오답 노트 정리",
       completed: true,
+    },
+    {
+      id: "w-6",
+      projectId: "proj-2",
+      category: "GRAPPLING",
+      title: "SQLD 2과목 SQL 기본 및 활용 모의고사 1회 풀이",
+      completed: true,
+    },
+    {
+      id: "w-7",
+      projectId: "proj-2",
+      category: "GRAPPLING",
+      title: "윈도우 함수 및 계층형 질의 핵심 문법 서브미션 공략",
+      completed: false,
+    },
+    {
+      id: "w-8",
+      projectId: "proj-2",
+      category: "GRAPPLING",
+      title: "데이터 모델링 3단계 및 엔티티 관계도 핵심 총정리",
+      completed: false,
+    },
+    // 3. HEALTH (체력 / 컨디셔닝 / 멘탈 관리)
+    {
+      id: "w-9",
+      projectId: "proj-4",
+      category: "HEALTH",
+      title: "아침 공복 유산소 러닝 5km & 코어 강화 루틴",
+      completed: true,
+    },
+    {
+      id: "w-10",
+      projectId: "proj-4",
+      category: "HEALTH",
+      title: "수면 7시간 수면 리듬 회복 & 수분 2L 섭취",
+      completed: false,
+    },
+    {
+      id: "w-11",
+      projectId: "proj-4",
+      category: "HEALTH",
+      title: "파이트 마인드셋 유지 & 시합 리허설 시각화 15분",
+      completed: true,
+    },
+    {
+      id: "w-12",
+      projectId: "proj-4",
+      category: "HEALTH",
+      title: "고단백 식단 관리 & 훈련 후 스트레칭 리커버리",
+      completed: false,
     },
   ]);
 
@@ -216,6 +492,17 @@ export default function CareerHubPage() {
     };
   }, []);
 
+  // ESC key listener to quickly close any active modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && activeModal) {
+        closeModal();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeModal]);
+
   const openModal = (modalName: string) => {
     if (modalName === "CAMP") {
       triggerTabTransition("CAMP");
@@ -243,6 +530,9 @@ export default function CareerHubPage() {
 
     executeArenaTransition(label, () => {
       setActiveModal(modalName);
+      if (modalName === "FIGHT") {
+        sounds.playBell();
+      }
     });
   };
 
@@ -261,21 +551,7 @@ export default function CareerHubPage() {
   };
 
   const handleToggleWorkout = (id: string) => {
-    const target = workouts.find((w) => w.id === id);
-    const willBeCompleted = target ? !target.completed : false;
-
-    if (willBeCompleted) {
-      sounds.playPunch();
-      setIsShaking(true);
-      setPunchFlash(true);
-      setTimeout(() => {
-        setIsShaking(false);
-        setPunchFlash(false);
-      }, 250);
-    } else {
-      sounds.playHover();
-    }
-
+    sounds.playSelect();
     setWorkouts((prev) =>
       prev.map((w) => (w.id === id ? { ...w, completed: !w.completed } : w))
     );
@@ -288,38 +564,28 @@ export default function CareerHubPage() {
   };
 
   const handleFighterPunch = () => {
-    sounds.playPunch();
-    setIsShaking(true);
-    setPunchFlash(true);
-    setTimeout(() => {
-      setIsShaking(false);
-      setPunchFlash(false);
-    }, 250);
+    sounds.playSelect();
   };
 
   const handleAddWorkout = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newWorkoutTitle.trim()) return;
 
-    sounds.playPunch();
-    setIsShaking(true);
-    setPunchFlash(true);
-    setTimeout(() => {
-      setIsShaking(false);
-      setPunchFlash(false);
-    }, 250);
+    sounds.playSelect();
 
-    const targetProject = activeProjectFilter !== "ALL" ? activeProjectFilter : newWorkoutProjectId;
+    const targetProject = newWorkoutProjectId || projects[0]?.id || "proj-1";
 
     const newItem: WorkoutItem = {
       id: `w-${Date.now()}`,
       projectId: targetProject,
+      category: "STAND-UP",
       title: newWorkoutTitle.trim(),
       completed: false,
     };
 
     setWorkouts((prev) => [newItem, ...prev]);
     setNewWorkoutTitle("");
+    setIsAddingWorkout(false);
   };
 
   const handleCreateProject = (e: React.FormEvent) => {
@@ -350,6 +616,7 @@ export default function CareerHubPage() {
   };
 
   const completedWorkouts = workouts.filter((w) => w.completed).length;
+  const campProgressPercent = Math.round((completedWorkouts / (workouts.length || 1)) * 100);
 
   return (
     <main
@@ -370,7 +637,7 @@ export default function CareerHubPage() {
         <div
           className={`absolute inset-0 transition-all duration-500 ${
             activeTab === "CAMP"
-              ? "bg-gradient-to-r from-black/95 via-black/80 to-transparent w-full md:w-[65%]"
+              ? "bg-gradient-to-r from-black/50 via-black/25 to-transparent w-full md:w-[65%]"
               : "bg-gradient-to-r from-[#05070a] via-[#05070a]/85 to-transparent w-full md:w-[65%]"
           }`}
         />
@@ -382,16 +649,8 @@ export default function CareerHubPage() {
 
       {/* 2. Top HUD Bar (EA Sports UFC Style) */}
       <header className="relative z-20 w-full px-6 py-2.5 border-b border-white/10 bg-black/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
-        {/* Navigation Tabs (LB / RB) */}
+        {/* Navigation Tabs */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => triggerTabTransition("HOME")}
-            className="flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-[10px] font-bold text-neutral-400 hover:text-white hover:border-red-500 transition-colors cursor-pointer"
-            title="이전 탭 (HOME)"
-          >
-            <span>LB</span>
-          </button>
-
           <nav className="flex items-center gap-1">
             {[
               { id: "HOME", label: "HOME" },
@@ -402,7 +661,7 @@ export default function CareerHubPage() {
                 onClick={() => {
                   triggerTabTransition(tab.id as any);
                 }}
-                className={`relative px-4 py-1 text-sm font-bold tracking-wider uppercase transition-all ${
+                className={`relative px-4 py-1 text-sm font-bold tracking-wider uppercase transition-all cursor-pointer ${
                   activeTab === tab.id
                     ? "text-white bg-red-600/30 border-b-2 border-red-600"
                     : "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
@@ -412,14 +671,6 @@ export default function CareerHubPage() {
               </button>
             ))}
           </nav>
-
-          <button
-            onClick={() => triggerTabTransition("CAMP")}
-            className="flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-[10px] font-bold text-neutral-400 hover:text-white hover:border-red-500 transition-colors cursor-pointer"
-            title="다음 탭 (TRAINING CAMP)"
-          >
-            <span>RB</span>
-          </button>
         </div>
 
         {/* Status Metrics (Top Right HUD) */}
@@ -802,288 +1053,259 @@ export default function CareerHubPage() {
         </div>
       </div>
       ) : (
-        /* TRAINING CAMP GYM STAGE (Matching User Reference Image wmux-paste-1789361831455.png) */
+        /* TRAINING CAMP GYM STAGE (Unified Single-Card To-Do List + Heavy Bag & Fighter) */
         <div className="relative z-10 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 p-6 max-w-[1800px] w-full mx-auto items-center">
-          {/* LEFT SECTION (6 Cols): UFC Training Camp To-Do List Dashboard */}
+          {/* LEFT SECTION (6 Cols): Unified UFC Fighter Evolution To-Do List Dashboard */}
           <div className="lg:col-span-6 flex flex-col w-full">
-            {/* Unified EA Sports UFC Fight Camp Command Center Card */}
-            <div className="bg-[#0b0f17]/90 border border-white/15 rounded-sm p-5 md:p-6 backdrop-blur-2xl shadow-2xl relative overflow-hidden flex flex-col gap-4 before:absolute before:top-0 before:left-0 before:w-1.5 before:h-full before:bg-gradient-to-b before:from-red-600 before:via-amber-500 before:to-transparent">
-              {/* 1. Header & Camp Status */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded bg-red-600/20 border border-red-500/40 text-red-500 shadow-[0_0_12px_rgba(220,38,38,0.3)]">
-                    <Swords className="w-5 h-5" />
+            <div className="bg-black/40 border border-white/10 rounded-sm p-4 md:p-5 backdrop-blur-md shadow-2xl relative overflow-hidden flex flex-col gap-3.5 min-h-[720px] h-[720px]">
+              {/* 1. HEAD COACHING BANNER BUTTON (Same size as TRAINING, with coach2.png background) */}
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playSelect();
+                  setShowCoachModal(true);
+                }}
+                onMouseEnter={() => sounds.playHover()}
+                className="relative rounded-sm overflow-hidden border border-amber-500/40 hover:border-amber-400 shadow-xl -mx-1 -mt-1 min-h-[72px] h-[72px] flex items-center justify-between text-left transition-all duration-200 group cursor-pointer shrink-0 bg-neutral-950"
+              >
+                {/* Background Image & Atmospheric Lighting */}
+                <div className="absolute inset-0 z-0 pointer-events-none">
+                  <Image
+                    src="/images/card_coach.jpg"
+                    alt="Coach Background"
+                    fill
+                    priority
+                    className="object-cover object-center filter brightness-40 contrast-125 grayscale"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-amber-950/40" />
+                </div>
+
+                {/* Right-Side Head Coach Bust Figure (coach2.png) */}
+                <div className="absolute right-0 top-0 bottom-0 w-44 md:w-56 pointer-events-none overflow-hidden z-10">
+                  <div className="relative w-full h-full transform translate-y-1 group-hover:scale-105 transition-transform duration-300">
+                    <Image
+                      src="/images/coach2.png"
+                      alt="Head Coach Tyrone"
+                      fill
+                      priority
+                      className="object-contain object-right-bottom drop-shadow-[0_0_15px_rgba(0,0,0,0.9)]"
+                    />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                      <span className="text-[10px] font-mono tracking-widest text-red-400 font-bold uppercase">
-                        CAMP COMMAND // FIGHT PREPARATION
-                      </span>
-                    </div>
-                    <h2 className="text-2xl md:text-3xl font-black font-teko text-white tracking-wide uppercase leading-tight">
-                      UFC TRAINING CAMP // FIGHT-BASED WORKOUTS
+                  <div className="absolute inset-0 bg-gradient-to-r from-black via-transparent to-transparent" />
+                </div>
+
+                {/* Bottom Amber Accent Line */}
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500/40 group-hover:bg-amber-400 z-10 transition-colors" />
+
+                {/* Content on Left: STRIKING COACH */}
+                <div className="relative z-20 px-5 py-4 flex flex-col justify-center">
+                  <div className="flex items-baseline gap-3">
+                    <h2 className="text-3xl md:text-4xl font-black font-teko text-white group-hover:text-amber-300 tracking-widest uppercase leading-none transition-colors drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+                      STRIKING COACH
                     </h2>
+                    <span className="text-xs font-semibold text-neutral-300 hidden sm:inline-block font-pretendard">
+                      타격 전술 & 멘탈 브리핑
+                    </span>
                   </div>
                 </div>
+              </button>
 
-                <button
-                  onClick={() => triggerTabTransition("HOME")}
-                  onMouseEnter={() => sounds.playHover()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-neutral-900/90 border border-white/15 hover:border-red-500 text-neutral-300 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-md"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>OCTAGON HUB</span>
-                </button>
-              </div>
-
-              {/* 2. Overall Camp Readiness Progress Bar */}
-              <div className="space-y-2 bg-neutral-950/60 p-3 rounded border border-white/5">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-neutral-300 flex items-center gap-2">
-                    <span>캠프 완수율 (CAMP READINESS)</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-600/20 text-red-400 border border-red-600/30">
-                      WEEK 4 OF 6
-                    </span>
-                  </span>
-                  <span className="text-emerald-400 font-mono text-sm font-black">
-                    {Math.round((completedWorkouts / (workouts.length || 1)) * 100)}% ({completedWorkouts}/{workouts.length} 완료)
-                  </span>
+              {/* 2. TRAINING Header Banner with Dynamic Left-to-Right Progress Background */}
+              <div className="relative rounded-sm overflow-hidden border border-white/15 shadow-xl -mx-1 min-h-[72px] h-[72px] flex items-center shrink-0">
+                {/* Base Background Image (Uncompleted / Darkened Grayscale) */}
+                <div className="absolute inset-0 z-0 pointer-events-none">
+                  <Image
+                    src="/images/card_camp.jpg"
+                    alt="UFC Training Camp Header Banner"
+                    fill
+                    priority
+                    className="object-cover object-[center_35%] filter brightness-45 contrast-125 grayscale"
+                  />
+                  <div className="absolute inset-0 bg-black/60" />
                 </div>
-                <div className="w-full h-2 rounded-full bg-neutral-900 overflow-hidden border border-white/10">
+
+                {/* Active Progress Fill from Left to Right (Colors the background) */}
+                <div
+                  className="absolute inset-y-0 left-0 z-1 pointer-events-none overflow-hidden transition-all duration-700 ease-out"
+                  style={{ width: `${campProgressPercent}%` }}
+                >
+                  {/* Full Color Image inside the progress width */}
+                  <div className="absolute inset-0 w-[900px] max-w-none h-full">
+                    <Image
+                      src="/images/card_camp.jpg"
+                      alt="UFC Training Camp Active Progress"
+                      fill
+                      priority
+                      className="object-cover object-[center_35%] filter brightness-90 contrast-125"
+                    />
+                    {/* Dynamic UFC Red Gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-red-700/60 via-red-600/50 to-red-500/60" />
+                  </div>
+
+                  {/* Leading Edge Glow Line */}
+                  <div className="absolute top-0 right-0 bottom-0 w-1 bg-gradient-to-b from-red-400 via-amber-300 to-red-400 shadow-[0_0_15px_rgba(248,113,113,1)]" />
+                </div>
+
+                {/* Bottom Progress Accent Line */}
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/80 z-10">
                   <div
-                    className="h-full bg-gradient-to-r from-red-600 via-amber-500 to-emerald-400 transition-all duration-500 rounded-full"
-                    style={{
-                      width: `${(completedWorkouts / (workouts.length || 1)) * 100}%`,
-                    }}
+                    className="h-full bg-gradient-to-r from-red-600 via-amber-500 to-emerald-400 transition-all duration-700"
+                    style={{ width: `${campProgressPercent}%` }}
                   />
                 </div>
-              </div>
 
-              {/* 3. Fight / Project Selector Filter Tabs */}
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                    <span>목표 경기 (FIGHT PROJECTS)</span>
-                  </span>
+                {/* Content inside Banner: Simply "TRAINING" and "OCTAGON HUB" */}
+                <div className="relative z-20 w-full px-5 py-4 flex items-center justify-between gap-4">
+                  <h2 className="text-3xl md:text-4xl font-black font-teko text-white tracking-widest uppercase leading-none drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)]">
+                    TRAINING
+                  </h2>
+
                   <button
-                    type="button"
-                    onClick={() => {
-                      sounds.playSelect();
-                      setShowNewProjectModal(true);
-                    }}
-                    className="text-[11px] font-bold text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 cursor-pointer"
+                    onClick={() => triggerTabTransition("HOME")}
+                    onMouseEnter={() => sounds.playHover()}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded bg-black/80 hover:bg-neutral-900 border border-white/20 hover:border-red-500 text-neutral-300 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-lg backdrop-blur-md font-pretendard"
                   >
-                    <Plus className="w-3 h-3" />
-                    <span>새 경기 등록</span>
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>OCTAGON HUB</span>
                   </button>
-                </div>
-
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sounds.playSelect();
-                      setActiveProjectFilter("ALL");
-                    }}
-                    className={`px-3 py-1.5 rounded text-xs font-bold tracking-wider uppercase transition-all cursor-pointer shrink-0 ${
-                      activeProjectFilter === "ALL"
-                        ? "bg-red-600 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]"
-                        : "bg-neutral-900/90 text-neutral-400 hover:text-white hover:bg-neutral-800 border border-white/10"
-                    }`}
-                  >
-                    전체 경기 ({workouts.length})
-                  </button>
-
-                  {projects.map((proj) => {
-                    const count = workouts.filter((w) => w.projectId === proj.id).length;
-                    const doneCount = workouts.filter((w) => w.projectId === proj.id && w.completed).length;
-                    const isSelected = activeProjectFilter === proj.id;
-                    return (
-                      <button
-                        key={proj.id}
-                        type="button"
-                        onClick={() => {
-                          sounds.playSelect();
-                          setActiveProjectFilter(proj.id);
-                          setNewWorkoutProjectId(proj.id);
-                        }}
-                        className={`px-3 py-1.5 rounded text-xs font-bold tracking-wider uppercase transition-all cursor-pointer shrink-0 flex items-center gap-2 ${
-                          isSelected
-                            ? proj.color === "red"
-                              ? "bg-red-600 text-white shadow-[0_0_12px_rgba(220,38,38,0.5)]"
-                              : proj.color === "amber"
-                              ? "bg-amber-600 text-white shadow-[0_0_12px_rgba(217,119,6,0.5)]"
-                              : "bg-blue-600 text-white shadow-[0_0_12px_rgba(37,99,235,0.5)]"
-                            : "bg-neutral-900/90 text-neutral-400 hover:text-white hover:bg-neutral-800 border border-white/10"
-                        }`}
-                      >
-                        <span
-                          className={`text-[9px] px-1 py-0.5 rounded font-mono ${
-                            isSelected ? "bg-black/30 text-white" : "bg-neutral-800 text-neutral-300"
-                          }`}
-                        >
-                          {proj.dDay}
-                        </span>
-                        <span>{proj.shortName}</span>
-                        <span className="text-[10px] opacity-75 font-mono">
-                          ({doneCount}/{count})
-                        </span>
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
 
-              {/* 4. Direct Inline Workout Input (사용자 요청: 바로 추가할 수 있도록) */}
-              <form
-                onSubmit={handleAddWorkout}
-                className="flex flex-col sm:flex-row items-stretch gap-2 bg-[#121722]/90 p-2.5 rounded border border-white/15 shadow-inner"
-              >
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-bold text-neutral-400 uppercase hidden sm:inline">경기:</span>
-                  <select
-                    value={activeProjectFilter !== "ALL" ? activeProjectFilter : newWorkoutProjectId}
-                    onChange={(e) => setNewWorkoutProjectId(e.target.value)}
-                    disabled={activeProjectFilter !== "ALL"}
-                    className="bg-neutral-900 border border-white/15 text-xs text-neutral-200 px-2.5 py-2 rounded focus:outline-none focus:border-red-500 cursor-pointer disabled:opacity-80 disabled:cursor-not-allowed max-w-[140px]"
-                  >
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.shortName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* 2. Single Unified Goal List (Translucent Pure Achromatic Grays, No Red Selection, No D-Day, Hidden Scrollbar) */}
+              <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pr-0">
+                {workouts.map((workout, index) => {
+                  const proj = projects.find((p) => p.id === workout.projectId) || projects[0];
+                  const isEven = index % 2 === 0;
 
-                <input
-                  type="text"
-                  placeholder="새 훈련 과제 입력 후 [Enter] 또는 [등록]... (예: 알고리즘 실전 풀이)"
-                  value={newWorkoutTitle}
-                  onChange={(e) => setNewWorkoutTitle(e.target.value)}
-                  className="flex-1 bg-neutral-950 border border-neutral-700 text-xs text-neutral-100 placeholder-neutral-500 px-3 py-2 rounded focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                />
-
-                <button
-                  type="submit"
-                  disabled={!newWorkoutTitle.trim()}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-neutral-800 disabled:text-neutral-500 disabled:cursor-not-allowed text-white text-xs font-bold tracking-wider rounded uppercase transition-colors flex items-center justify-center gap-1 cursor-pointer shrink-0 shadow-md hover:shadow-red-600/30"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>등록</span>
-                </button>
-              </form>
-
-              {/* 5. Scrollable Project-Based Workout List */}
-              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                {workouts
-                  .filter((w) => activeProjectFilter === "ALL" || w.projectId === activeProjectFilter)
-                  .map((workout) => {
-                    const proj = projects.find((p) => p.id === workout.projectId) || projects[0];
-                    return (
-                      <div
-                        key={workout.id}
-                        onClick={() => handleToggleWorkout(workout.id)}
-                        className={`flex items-center justify-between p-3 rounded border transition-all cursor-pointer select-none group ${
-                          workout.completed
-                            ? "bg-black/45 border-neutral-800 text-neutral-500 opacity-65"
-                            : "bg-[#131924]/95 hover:bg-[#192230] border-white/10 hover:border-red-600/60 text-neutral-100 shadow-md"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {workout.completed ? (
-                            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                          ) : (
-                            <Circle className="w-5 h-5 text-neutral-500 group-hover:text-red-400 shrink-0 transition-colors" />
-                          )}
-                          <div className="min-w-0">
-                            {/* Project Badge (경기 정보 배지 - Striking/High 태그 제거) */}
-                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                              <span
-                                className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-1 ${
-                                  proj.color === "red"
-                                    ? "bg-red-950/80 text-red-400 border border-red-800/50"
-                                    : proj.color === "amber"
-                                    ? "bg-amber-950/80 text-amber-400 border border-amber-800/50"
-                                    : "bg-blue-950/80 text-blue-400 border border-blue-800/50"
-                                }`}
-                              >
-                                <span className="font-mono">{proj.badge}</span>
-                                <span>•</span>
-                                <span className="truncate max-w-[160px]">{proj.shortName}</span>
-                              </span>
-                              <span className="text-[9px] font-mono text-neutral-400 px-1 py-0.5 rounded bg-neutral-900 border border-white/5">
-                                {proj.dDay}
-                              </span>
-                            </div>
-
-                            <p
-                              className={`text-xs font-medium truncate ${
-                                workout.completed ? "line-through text-neutral-500" : "text-white"
-                              }`}
-                            >
-                              {workout.title}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                  return (
+                    <div
+                      key={workout.id}
+                      onClick={() => handleToggleWorkout(workout.id)}
+                      onMouseEnter={() => sounds.playHover()}
+                      className={`group relative p-3 rounded-sm transition-all duration-150 cursor-pointer select-none backdrop-blur-sm ${
+                        isEven
+                          ? "bg-[#28282b]/60 hover:bg-[#343438]/75 border border-white/10 hover:border-white/30"
+                          : "bg-[#141416]/60 hover:bg-[#1e1e21]/75 border border-white/5 hover:border-white/20"
+                      } ${workout.completed ? "opacity-55" : "opacity-100"}`}
+                    >
+                      {/* Line 1: 프로젝트 (Project) */}
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-2 min-w-0">
                           <span
-                            className={`text-xs font-bold font-mono ${
-                              workout.completed ? "text-emerald-400" : "text-neutral-400"
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              proj.color === "red"
+                                ? "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)]"
+                                : proj.color === "amber"
+                                ? "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]"
+                                : proj.color === "blue"
+                                ? "bg-blue-400 shadow-[0_0_6px_rgba(96,165,250,0.8)]"
+                                : "bg-neutral-300 shadow-[0_0_6px_rgba(255,255,255,0.4)]"
                             }`}
-                          >
-                            {workout.completed ? "KO 완수 🥊" : "미완료"}
+                          />
+                          <span className="text-xs font-bold tracking-wider uppercase text-neutral-400 group-hover:text-neutral-200 truncate transition-colors">
+                            {proj.shortName}
                           </span>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteWorkout(workout.id, e)}
-                            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-600/30 text-neutral-400 hover:text-red-400 transition-all cursor-pointer"
-                            title="과제 삭제"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
                         </div>
-                      </div>
-                    );
-                  })}
 
-                {workouts.filter((w) => activeProjectFilter === "ALL" || w.projectId === activeProjectFilter).length === 0 && (
-                  <div className="py-10 text-center text-neutral-400 text-xs border border-dashed border-white/10 rounded">
-                    등록된 훈련 과제가 없습니다. 위 입력창에서 바로 새 훈련 과제를 추가해보세요! 🥊
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteWorkout(workout.id, e)}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-red-400 transition-all cursor-pointer shrink-0"
+                          title="목표 삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Line 2: 목표 (Goal Task Description) */}
+                      <p
+                        className={`text-xs sm:text-sm font-semibold truncate transition-colors ${
+                          workout.completed
+                            ? "line-through text-neutral-400"
+                            : "text-neutral-100 group-hover:text-white"
+                        }`}
+                      >
+                        {workout.title}
+                      </p>
+                    </div>
+                  );
+                })}
+
+                {workouts.length === 0 && (
+                  <div className="h-full min-h-[200px] flex flex-col items-center justify-center py-12 text-center text-neutral-500 text-xs border border-dashed border-white/10 rounded">
+                    현재 등록된 훈련 목표가 없습니다.
                   </div>
                 )}
               </div>
 
-              {/* 6. List Footer */}
-              <div className="pt-3 border-t border-white/10 flex flex-wrap items-center justify-between text-xs text-neutral-400">
-                <span className="text-[11px] text-neutral-400">
-                  남은 과제: <strong className="text-white">{workouts.length - completedWorkouts}</strong>개 (전체 {workouts.length}개)
-                </span>
-                <div className="flex items-center gap-2">
+              {/* 4. List Footer: Only [+] Button & Inline Quick Input */}
+              <div className="pt-3 border-t border-white/10 flex items-center font-pretendard mt-auto shrink-0">
+                {!isAddingWorkout ? (
                   <button
                     type="button"
                     onClick={() => {
                       sounds.playSelect();
-                      setWorkouts((prev) => prev.map((w) => ({ ...w, completed: true })));
+                      setIsAddingWorkout(true);
                     }}
-                    className="text-[11px] font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    className="p-2 rounded bg-white/10 hover:bg-white/20 border border-white/15 hover:border-white/35 text-neutral-300 hover:text-white transition-all cursor-pointer flex items-center justify-center shadow-sm"
+                    title="목표 추가"
                   >
-                    모두 완료
+                    <Plus className="w-4 h-4" />
                   </button>
-                  <span className="text-neutral-700">•</span>
-                  <button
-                    type="button"
-                    onClick={() => {
+                ) : (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!newWorkoutTitle.trim()) return;
                       sounds.playSelect();
-                      setWorkouts((prev) => prev.map((w) => ({ ...w, completed: false })));
+                      const newItem: WorkoutItem = {
+                        id: `w-${Date.now()}`,
+                        projectId: newWorkoutProjectId || projects[0]?.id || "proj-1",
+                        category: "STAND-UP",
+                        title: newWorkoutTitle.trim(),
+                        completed: false,
+                      };
+                      setWorkouts((prev) => [newItem, ...prev]);
+                      setNewWorkoutTitle("");
+                      setIsAddingWorkout(false);
                     }}
-                    className="text-[11px] font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    className="flex items-center gap-2 w-full"
                   >
-                    모두 초기화
-                  </button>
-                </div>
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="새로운 훈련 목표를 입력하세요... (Enter로 추가, Esc로 취소)"
+                      value={newWorkoutTitle}
+                      onChange={(e) => setNewWorkoutTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setIsAddingWorkout(false);
+                          setNewWorkoutTitle("");
+                        }
+                      }}
+                      className="flex-1 bg-black/60 border border-white/20 focus:border-white/50 text-xs sm:text-sm text-neutral-100 placeholder:text-neutral-500 px-3 py-1.5 rounded focus:outline-none transition-colors"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newWorkoutTitle.trim()}
+                      className="px-3 py-1.5 rounded bg-white/20 hover:bg-white/30 border border-white/30 disabled:opacity-40 text-xs font-bold text-white transition-all cursor-pointer shrink-0"
+                    >
+                      추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sounds.playHover();
+                        setIsAddingWorkout(false);
+                        setNewWorkoutTitle("");
+                      }}
+                      className="p-1.5 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                      title="취소"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </form>
+                )}
               </div>
             </div>
           </div>
@@ -1100,17 +1322,15 @@ export default function CareerHubPage() {
               </div>
             </div>
 
-            {/* Interactive Heavy Bag & Striking Fighter Stage */}
+            {/* Heavy Bag & Striking Fighter Stage */}
             <div
               onClick={handleFighterPunch}
               className="relative w-full h-[580px] lg:h-[720px] flex items-end justify-end cursor-pointer z-15 group pr-2 lg:pr-6"
-              title="클릭하여 샌드백 타격하기 🥊"
+              title="클릭하여 훈련 파이터 인터랙션"
             >
               {/* 1. Heavy Punching Bag (Positioned directly in front of Conor's punching glove) */}
               <div
-                className={`absolute bottom-16 sm:bottom-18 lg:bottom-20 right-[270px] sm:right-[330px] md:right-[390px] lg:right-[450px] w-[125px] sm:w-[145px] md:w-[160px] lg:w-[175px] h-[480px] sm:h-[560px] md:h-[620px] lg:h-[680px] z-14 transition-all duration-200 origin-top ${
-                  punchFlash ? "-rotate-6 -translate-x-2 brightness-110" : "rotate-0 translate-x-0 brightness-100"
-                }`}
+                className="absolute bottom-16 sm:bottom-18 lg:bottom-20 right-[270px] sm:right-[330px] md:right-[390px] lg:right-[450px] w-[125px] sm:w-[145px] md:w-[160px] lg:w-[175px] h-[480px] sm:h-[560px] md:h-[620px] lg:h-[680px] z-14 transition-all duration-200 origin-top"
               >
                 {/* Ceiling Chain attachment visual extending up to beams */}
                 <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-1.5 h-36 bg-gradient-to-b from-neutral-600 via-neutral-400 to-neutral-700 opacity-80" />
@@ -1136,14 +1356,7 @@ export default function CareerHubPage() {
                 />
               </div>
 
-              {/* 2. Punch Strike Impact Spark / Flare (Appears right between glove and heavy bag) */}
-              {punchFlash && (
-                <div className="absolute top-[31%] lg:top-[30%] right-[260px] sm:right-[320px] md:right-[380px] lg:right-[445px] z-30 pointer-events-none animate-ping">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-r from-red-500 to-amber-400 blur-sm shadow-[0_0_24px_rgba(239,68,68,0.9)]" />
-                </div>
-              )}
-
-              {/* 3. Conor McGregor Grounded on Gym Mat Floor (Shifted to the right) */}
+              {/* 2. Conor McGregor Grounded on Gym Mat Floor (Shifted to the right) */}
               <div className="relative w-[340px] sm:w-[410px] md:w-[470px] lg:w-[530px] h-full flex items-end justify-center z-15">
                 {/* Single Large Enveloping Curved Ground Shadow under McGregor's feet */}
                 <div className="absolute -bottom-6 lg:-bottom-8 flex items-center justify-center w-full pointer-events-none z-0">
@@ -1156,11 +1369,9 @@ export default function CareerHubPage() {
                   />
                 </div>
 
-                {/* Fighter Image with idle breathe and punch interaction */}
+                {/* Fighter Image with idle breathe (No punch flash shake) */}
                 <div
-                  className={`relative w-full h-full animate-idle-breathe z-10 flex items-end justify-center transition-transform ${
-                    punchFlash ? "scale-[1.02] -translate-x-1" : "scale-100"
-                  }`}
+                  className="relative w-full h-full animate-idle-breathe z-10 flex items-end justify-center"
                 >
                   <Image
                     src="/images/fighter_mcgregor_training.png"
@@ -1173,11 +1384,11 @@ export default function CareerHubPage() {
               </div>
             </div>
 
-            {/* Bottom Fighter Attributes Strip */}
+            {/* Bottom Fighter Status Strip (NO STARS) */}
             <div className="relative z-20 w-full max-w-sm flex flex-col gap-1.5 mt-2 pointer-events-auto pr-2 lg:pr-6">
-              <div className="bg-black/80 backdrop-blur-sm border-l-2 border-red-600 px-3 py-1 flex items-center justify-between gap-4 text-[10px] md:text-xs font-black uppercase tracking-wider shadow-lg">
-                <span className="text-neutral-200">TRAINING FOCUS: HEAVY BAG STRIKING</span>
-                <span className="text-amber-400">★★★★★</span>
+              <div className="bg-black/80 backdrop-blur-sm border-l-2 border-red-600 px-3 py-1.5 flex items-center justify-between gap-4 text-[10px] md:text-xs font-black uppercase tracking-wider shadow-lg">
+                <span className="text-neutral-200">TRAINING FOCUS: FIGHT-BASED PREPARATION</span>
+                <span className="text-emerald-400 font-mono font-bold">READY</span>
               </div>
             </div>
           </div>
@@ -1213,69 +1424,255 @@ export default function CareerHubPage() {
       {/* 5. INTERACTIVE MODALS FOR EVERY ACTIVE BUTTON                             */}
       {/* ========================================================================= */}
 
-      {/* MODAL 1: Fight Modal */}
+      {/* MODAL 1: Fight Modal - UFC Tale of the Tape (EA Sports Broadcast Style) */}
       {activeModal === "FIGHT" && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative w-full max-w-2xl bg-[#0e1219] border-2 border-red-600 rounded-sm shadow-2xl overflow-hidden p-6 animate-fade-in">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Swords className="w-5 h-5 text-red-500" />
-                <h3 className="text-xl font-black font-teko uppercase text-white tracking-wide">
-                  UFC TITLE BOUT STRATEGY & DETAILS
-                </h3>
+        <div className="fixed inset-0 z-50 overflow-hidden bg-black select-none animate-fade-in flex flex-col justify-between">
+          {/* Background Arena with Dark Cinematic Vignette */}
+          <div className="absolute inset-0 z-0 pointer-events-none">
+            <Image
+              src="/images/ufc_arena_transition.jpg"
+              alt="UFC Arena Octagon"
+              fill
+              priority
+              className="object-cover object-center opacity-45 scale-105"
+            />
+            {/* Spotlight & Vignette Masks */}
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(15,23,42,0.25)_0%,_rgba(6,8,12,0.85)_70%,_rgba(0,0,0,0.98)_100%)]" />
+            <div className="absolute inset-x-0 bottom-0 h-48 sm:h-72 bg-gradient-to-t from-black via-black/80 to-transparent" />
+            <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/85 to-transparent" />
+          </div>
+
+          {/* Top Bar: Clean X Button */}
+          <header className="relative z-30 flex items-center justify-end px-6 sm:px-12 pt-6 pb-2 w-full">
+            {/* Clean X close button as requested */}
+            <button
+              onClick={closeModal}
+              onMouseEnter={() => sounds.playHover()}
+              className="p-2.5 rounded-full bg-neutral-900/90 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-white/20 hover:border-white/50 transition-all cursor-pointer shadow-xl active:scale-90"
+              title="Close (ESC)"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </header>
+
+          {/* Main Stage: Left Fighter (McGregor) + Center Board + Right Fighter (Tsang) */}
+          <main className="relative z-20 flex-1 w-full max-w-[1700px] mx-auto flex items-end justify-center px-4 sm:px-8 pb-2">
+            {/* LEFT FIGHTER: Conor McGregor */}
+            <div className="absolute left-0 sm:left-4 md:left-8 lg:left-14 bottom-0 w-[42%] sm:w-[38%] md:w-[36%] max-w-[540px] h-[78vh] sm:h-[84vh] pointer-events-none flex flex-col justify-end z-10">
+              <div className="relative w-full h-full animate-idle-breathe">
+                <Image
+                  src="/images/fighter_mcgregor_side.png"
+                  alt="Conor McGregor"
+                  fill
+                  priority
+                  className="object-contain object-bottom select-none filter drop-shadow-[0_20px_40px_rgba(0,0,0,0.9)]"
+                />
               </div>
-              <button
-                onClick={closeModal}
-                className="p-1 rounded bg-neutral-800 hover:bg-red-600 text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+
+              {/* McGregor Nameplate (Lower body banner matching reference) */}
+              <div className="absolute left-4 sm:left-8 md:left-12 bottom-10 sm:bottom-14 z-20 pointer-events-auto max-w-[280px]">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="inline-flex items-center justify-center w-6 h-6 bg-[#f4c300] text-black font-black font-teko text-base rounded-[1px] leading-none shadow">
+                    C
+                  </span>
+                  <span className="text-[12px] font-bold uppercase tracking-widest text-[#f4c300] font-teko">
+                    UNDISPUTED CHAMPION
+                  </span>
+                </div>
+                <div className="text-4xl sm:text-5xl lg:text-6xl font-black font-teko uppercase text-white tracking-wider leading-[0.88] drop-shadow-[0_4px_12px_rgba(0,0,0,0.95)]">
+                  CONOR<br />MCGREGOR
+                </div>
+                <div className="h-[2px] bg-white/70 w-full my-2 shadow" />
+                <div className="flex items-center gap-3">
+                  {/* Ireland Flag */}
+                  <svg className="w-7 h-4.5 rounded-[1px] shadow border border-white/30 shrink-0" viewBox="0 0 30 20">
+                    <rect width="10" height="20" fill="#169b62" />
+                    <rect x="10" width="10" height="20" fill="#ffffff" />
+                    <rect x="20" width="10" height="20" fill="#ff883e" />
+                  </svg>
+                  <span className="text-xl sm:text-2xl font-black font-teko text-white tracking-widest leading-none drop-shadow">
+                    22-6-0
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-4 text-sm text-neutral-300">
-              <div className="p-4 bg-black/60 rounded border border-red-600/30">
-                <div className="text-xs text-red-400 font-bold uppercase mb-1">MAIN EVENT FIGHT CARD</div>
-                <div className="text-2xl font-black font-teko text-white">VS. CHAOXIANG TSANG</div>
-                <p className="text-xs text-neutral-400">
-                  이번 경기의 가상 적: <strong>나태함 & 정보처리기사 실기</strong>
-                </p>
-                <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-white/10 text-xs text-center">
-                  <div>
-                    <span className="text-neutral-500 block">D-DAY</span>
-                    <span className="font-bold text-red-400">2026. 09. 21 (D-7)</span>
+            {/* RIGHT FIGHTER: Chaoxiang Tsang */}
+            <div className="absolute right-0 sm:right-4 md:right-8 lg:right-14 bottom-0 w-[42%] sm:w-[38%] md:w-[36%] max-w-[540px] h-[78vh] sm:h-[84vh] pointer-events-none flex flex-col justify-end items-end z-10">
+              <div className="relative w-full h-full animate-idle-breathe">
+                <Image
+                  src="/images/enemy1.png"
+                  alt="Chaoxiang Tsang"
+                  fill
+                  priority
+                  className="object-contain object-bottom select-none filter drop-shadow-[0_20px_40px_rgba(0,0,0,0.9)]"
+                />
+              </div>
+
+              {/* Opponent Nameplate (Lower body banner matching reference) */}
+              <div className="absolute right-4 sm:right-8 md:right-12 bottom-10 sm:bottom-14 z-20 pointer-events-auto max-w-[280px] text-right flex flex-col items-end">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[12px] font-bold uppercase tracking-widest text-neutral-300 font-teko">
+                    #1 RANKED CONTENDER
+                  </span>
+                  <span className="inline-flex items-center justify-center w-6 h-6 bg-neutral-200 text-black font-black font-teko text-base rounded-[1px] leading-none shadow">
+                    1
+                  </span>
+                </div>
+                <div className="text-4xl sm:text-5xl lg:text-6xl font-black font-teko uppercase text-white tracking-wider leading-[0.88] drop-shadow-[0_4px_12px_rgba(0,0,0,0.95)]">
+                  CHAOXIANG<br />TSANG
+                </div>
+                <div className="h-[2px] bg-white/70 w-full my-2 shadow" />
+                <div className="flex items-center justify-end gap-3">
+                  <span className="text-xl sm:text-2xl font-black font-teko text-white tracking-widest leading-none drop-shadow">
+                    19-2-0
+                  </span>
+                  {/* Flag */}
+                  <svg className="w-7 h-4.5 rounded-[1px] shadow border border-white/30 shrink-0" viewBox="0 0 30 20">
+                    <rect width="30" height="20" fill="#de2910" />
+                    <polygon points="5,2 6.5,6.5 2.5,3.7 7.5,3.7 3.5,6.5" fill="#ffde00" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* CENTER TALE OF THE TAPE BOARD */}
+            <div className="relative z-20 my-auto mb-8 sm:mb-12 w-full max-w-[360px] sm:max-w-[420px] md:max-w-[440px] flex items-stretch shadow-[0_25px_60px_rgba(0,0,0,0.95)]">
+              {/* Left Yellow Vertical Stripe */}
+              <div className="w-6 sm:w-7 bg-[#f4c300] flex flex-col items-center justify-center py-6 relative shrink-0">
+                {/* Pointer Notch pointing left */}
+                <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-0 h-0 border-y-8 border-y-transparent border-r-8 border-r-[#f4c300]" />
+                <span
+                  style={{ writingMode: "vertical-lr" }}
+                  className="text-[10px] sm:text-[11px] font-black tracking-[0.25em] text-black uppercase rotate-180 select-none whitespace-nowrap"
+                >
+                  . IRELAND - DUBLIN, IRELAND - .
+                </span>
+              </div>
+
+              {/* Center Dark Panel */}
+              <div className="flex-1 bg-[#1e2024]/95 backdrop-blur-md border-y border-white/10 flex flex-col">
+                {/* UFC Yellow Top Tab */}
+                <div className="flex justify-center -mt-0">
+                  <div className="bg-[#f4c300] px-8 py-1.5 shadow-md flex items-center justify-center min-w-[130px] sm:min-w-[150px]">
+                    <span className="text-white font-black italic text-3xl sm:text-4xl font-teko tracking-tighter leading-none transform -skew-x-12 drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
+                      UFC
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-neutral-500 block">WEIGHT</span>
-                    <span className="font-bold text-white">205 LBS (LIGHT HEAVY)</span>
+                </div>
+
+                {/* Division Title & Bout Objective */}
+                <div className="pt-3 pb-2.5 px-6 text-center">
+                  <h2 className="text-white font-black font-teko text-3xl sm:text-4xl tracking-wider uppercase leading-none">
+                    LIGHTWEIGHT
+                  </h2>
+                  <p className="text-neutral-400 font-teko text-sm sm:text-base tracking-[0.3em] uppercase italic font-bold mt-0.5">
+                    CHAMPIONSHIP
+                  </p>
+                  <p className="text-neutral-400 font-pretendard text-xs sm:text-sm font-light tracking-wider mt-1">
+                    정보처리기사 취득
+                  </p>
+                </div>
+
+                {/* Stat Rows */}
+                <div className="flex flex-col">
+                  {/* Row 1: AGE */}
+                  <div className="grid grid-cols-3 items-center py-3.5 px-6 border-t border-white/10">
+                    <span className="text-right font-teko font-black text-3xl sm:text-4xl text-white tracking-wide leading-none">
+                      36
+                    </span>
+                    <span className="text-center font-teko font-bold text-base sm:text-lg text-neutral-400 tracking-widest uppercase leading-none">
+                      AGE
+                    </span>
+                    <span className="text-left font-teko font-black text-3xl sm:text-4xl text-white tracking-wide leading-none">
+                      32
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-neutral-500 block">HYPE</span>
-                    <span className="font-bold text-emerald-400">VERY HIGH</span>
+
+                  {/* Row 2: HEIGHT */}
+                  <div className="grid grid-cols-3 items-center py-3.5 px-6 border-t border-white/10">
+                    <span className="text-right font-teko font-black text-3xl sm:text-4xl text-white tracking-wide leading-none">
+                      5' 9"
+                    </span>
+                    <span className="text-center font-teko font-bold text-base sm:text-lg text-neutral-400 tracking-widest uppercase leading-none">
+                      HEIGHT
+                    </span>
+                    <span className="text-left font-teko font-black text-3xl sm:text-4xl text-white tracking-wide leading-none">
+                      6' 1"
+                    </span>
+                  </div>
+
+                  {/* Row 3: WEIGHT */}
+                  <div className="grid grid-cols-3 items-center py-3.5 px-6 border-t border-white/10">
+                    <span className="text-right font-teko font-black text-3xl sm:text-4xl text-white tracking-wide leading-none">
+                      155 lbs
+                    </span>
+                    <span className="text-center font-teko font-bold text-base sm:text-lg text-neutral-400 tracking-widest uppercase leading-none">
+                      WEIGHT
+                    </span>
+                    <span className="text-left font-teko font-black text-3xl sm:text-4xl text-white tracking-wide leading-none">
+                      155 lbs
+                    </span>
+                  </div>
+
+                  {/* Row 4: REACH */}
+                  <div className="grid grid-cols-3 items-center py-3.5 px-6 border-t border-white/10">
+                    <span className="text-right font-teko font-black text-3xl sm:text-4xl text-white tracking-wide leading-none">
+                      74"
+                    </span>
+                    <span className="text-center font-teko font-bold text-base sm:text-lg text-neutral-400 tracking-widest uppercase leading-none">
+                      REACH
+                    </span>
+                    <span className="text-left font-teko font-black text-3xl sm:text-4xl text-white tracking-wide leading-none">
+                      75"
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-neutral-900/60 p-3 rounded border border-white/10">
-                <h4 className="text-xs font-bold text-neutral-300 uppercase mb-1">코치의 전략 지시서</h4>
-                <p className="text-xs text-neutral-400 leading-relaxed">
-                  "상대는 집중력이 흐트러지는 후반 라운드에 기습 테이크다운(스마트폰/유튜브)을 시도할 것이다. 
-                  전반 3개 라운드 동안 90분 단위 고강도 스프린트 훈련으로 승기를 굳혀라."
-                </p>
-              </div>
-
-              <div className="flex gap-2 justify-end pt-2">
-                <button
-                  onClick={() => {
-                    sounds.playPunch();
-                    closeModal();
-                  }}
-                  className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs uppercase tracking-wider rounded-sm transition-colors shadow-lg"
+              {/* Right Yellow Vertical Stripe */}
+              <div className="w-6 sm:w-7 bg-[#f4c300] flex flex-col items-center justify-center py-6 relative shrink-0">
+                {/* Pointer Notch pointing right */}
+                <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-0 h-0 border-y-8 border-y-transparent border-l-8 border-l-[#f4c300]" />
+                <span
+                  style={{ writingMode: "vertical-lr" }}
+                  className="text-[10px] sm:text-[11px] font-black tracking-[0.25em] text-black uppercase select-none whitespace-nowrap"
                 >
-                  시합 준비 훈련 즉시 시작
-                </button>
+                  - BEIJING, CHINA - . ASIA .
+                </span>
               </div>
             </div>
-          </div>
+          </main>
+
+          {/* Bottom Controls Bar: Skip & Start Bout Action */}
+          <footer className="relative z-30 flex items-center justify-between px-6 sm:px-12 py-4 w-full bg-gradient-to-t from-black via-black/90 to-transparent">
+            {/* Left: EA Sports style Skip button */}
+            <button
+              onClick={closeModal}
+              onMouseEnter={() => sounds.playHover()}
+              className="text-neutral-400 hover:text-white font-teko text-lg tracking-wider uppercase flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <span className="px-2 py-0.5 rounded bg-neutral-800 border border-white/20 text-xs font-mono text-neutral-300">
+                ESC
+              </span>
+              <span>SKIP</span>
+            </button>
+
+            {/* Right: Enter Octagon Action Button */}
+            <button
+              onClick={() => {
+                sounds.playPunch();
+                sounds.playBell();
+                closeModal();
+              }}
+              onMouseEnter={() => sounds.playHover()}
+              className="group relative px-8 py-3 bg-[#f4c300] hover:bg-yellow-400 text-black font-black font-teko text-2xl uppercase tracking-wider rounded-sm transition-all duration-200 shadow-[0_0_25px_rgba(244,195,0,0.5)] flex items-center gap-3 active:scale-95 cursor-pointer"
+            >
+              <Swords className="w-5 h-5 text-black" />
+              <span>START BOUT // 시합 시작</span>
+              <ChevronRight className="w-5 h-5 text-black group-hover:translate-x-1 transition-transform" />
+            </button>
+          </footer>
         </div>
       )}
 
@@ -1754,6 +2151,206 @@ export default function CareerHubPage() {
           </div>
         </div>
       )}
+
+      {/* 6. GAME-STYLE HEAD COACHING DIALOGUE MODAL (EA Sports UFC Career Mode Style) */}
+      {showCoachModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 select-none font-pretendard">
+          <div className="relative w-full max-w-5xl h-[660px] max-h-[92vh] bg-[#0c0e14] border border-white/15 rounded-sm shadow-2xl overflow-hidden flex flex-col justify-between before:absolute before:top-0 before:left-0 before:w-full before:h-1 before:bg-gradient-to-r before:from-red-600 via-amber-500 before:to-red-600">
+            {/* Background Gym Ambience */}
+            <div className="absolute inset-0 z-0 pointer-events-none opacity-25">
+              <Image
+                src="/images/ufc_training_gym_v2.jpg"
+                alt="Gym Background"
+                fill
+                className="object-cover object-center filter grayscale brightness-50"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/40" />
+            </div>
+
+            {/* Top Bar: Title & Close Button */}
+            <div className="relative z-20 px-5 md:px-6 py-3.5 border-b border-white/10 flex items-center justify-between bg-black/50 backdrop-blur-md">
+              <h3 className="text-xl md:text-2xl font-black font-teko uppercase text-white tracking-wide">
+                STRIKING COACH DIALOGUE • 타격 전술 & 멘탈 코칭
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playHover();
+                  setShowCoachModal(false);
+                }}
+                className="p-1.5 rounded hover:bg-white/15 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                title="닫기 (ESC)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Stage Body: Coach Character on Right + Dialogue & Choice Panel on Left */}
+            <div className="relative z-10 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-5 md:p-6 overflow-hidden items-end">
+              {/* Left Column (7 cols): Dialogue Console & Choice Options */}
+              <div className="lg:col-span-7 flex flex-col justify-between h-full space-y-4 py-1">
+                {/* 1. Coach Speech Box */}
+                <div className="bg-black/65 border border-amber-500/30 rounded-sm p-4 md:p-5 backdrop-blur-md shadow-xl relative">
+                  {/* Speaker Header */}
+                  <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-white/10">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)] animate-pulse" />
+                      <span className="font-teko font-black text-xl tracking-wider text-amber-400 uppercase">
+                        COACH TYRONE (스트라이킹 코치)
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono text-neutral-400 tracking-wider uppercase">
+                      {COACH_DIALOGS[currentDialogNode]?.category || "TACTICAL ADVICE"}
+                    </span>
+                  </div>
+
+                  {/* Coach's Current Speech */}
+                  <p className="text-sm md:text-base font-medium text-neutral-100 leading-relaxed font-pretendard">
+                    "{coachReaction || COACH_DIALOGS[currentDialogNode]?.coachSpeech}"
+                  </p>
+
+                  {/* Active Stat / Morale Notification if any */}
+                  {activeStatEffect && (
+                    <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded bg-amber-500/15 border border-amber-400/40 text-amber-300 text-xs font-bold tracking-wide shadow-sm animate-fade-in">
+                      <span>{activeStatEffect}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Player Response Choices (선택지) */}
+                <div className="space-y-2 mt-auto">
+                  <div className="text-[11px] font-mono font-bold tracking-widest text-neutral-400 uppercase flex items-center justify-between gap-2 mb-1">
+                    <span>SELECT YOUR RESPONSE (답변 선택)</span>
+                    {coachReaction && (
+                      <span className="text-amber-400 text-[10px] font-sans font-bold">
+                        코치 피드백 접수됨
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {COACH_DIALOGS[currentDialogNode]?.choices.map((choice, idx) => {
+                      const isSelected = selectedChoiceId === choice.id;
+                      return (
+                        <button
+                          key={choice.id}
+                          type="button"
+                          onClick={() => {
+                            sounds.playSelect();
+                            setSelectedChoiceId(choice.id);
+                            setCoachReaction(choice.coachReaction);
+                            setActiveStatEffect(choice.statEffect);
+                            if (choice.nextNodeId) {
+                              setTimeout(() => {
+                                setCurrentDialogNode(choice.nextNodeId!);
+                                setCoachReaction(null);
+                                setSelectedChoiceId(null);
+                              }, 1800);
+                            }
+                          }}
+                          onMouseEnter={() => sounds.playHover()}
+                          className={`w-full p-3 rounded-sm text-left transition-all duration-150 cursor-pointer flex items-center justify-between gap-3 border backdrop-blur-md group ${
+                            isSelected
+                              ? "bg-amber-500/20 border-amber-400 text-white shadow-[0_0_15px_rgba(245,158,11,0.25)]"
+                              : "bg-[#181a20]/80 hover:bg-[#252832]/90 border-white/10 hover:border-white/30 text-neutral-200 hover:text-white"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="w-6 h-6 rounded bg-black/60 border border-white/20 text-neutral-400 group-hover:text-amber-400 group-hover:border-amber-400/60 text-xs font-bold font-mono flex items-center justify-center shrink-0 transition-colors">
+                              {idx + 1}
+                            </span>
+                            <span className="text-xs sm:text-sm font-semibold truncate transition-colors">
+                              {choice.label}
+                            </span>
+                          </div>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase shrink-0 transition-colors ${
+                              choice.badgeColor === "red"
+                                ? "bg-red-950/40 text-red-400 border-red-500/40"
+                                : choice.badgeColor === "blue"
+                                ? "bg-blue-950/40 text-blue-400 border-blue-500/40"
+                                : choice.badgeColor === "amber"
+                                ? "bg-amber-950/40 text-amber-400 border-amber-500/40"
+                                : "bg-emerald-950/40 text-emerald-400 border-emerald-500/40"
+                            }`}
+                          >
+                            {choice.badge}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Action Bar: Reset Conversation or Return to Training */}
+                  <div className="pt-2 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sounds.playSelect();
+                        setCurrentDialogNode("start");
+                        setCoachReaction(null);
+                        setActiveStatEffect(null);
+                        setSelectedChoiceId(null);
+                      }}
+                      className="text-xs font-bold text-neutral-400 hover:text-white underline underline-offset-4 cursor-pointer transition-colors"
+                    >
+                      ↩ 처음부터 다시 대화하기
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sounds.playSelect();
+                        setShowCoachModal(false);
+                      }}
+                      className="px-4 py-2 rounded bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-wider transition-colors cursor-pointer shadow-lg font-pretendard"
+                    >
+                      훈련으로 복귀 🥊
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column (5 cols): Coach 3D Cutout Figure Standing on Mat */}
+              <div className="lg:col-span-5 relative h-full flex flex-col items-center justify-end pointer-events-none select-none">
+                {/* Floor shadow */}
+                <div className="absolute bottom-2 flex items-center justify-center w-full z-0">
+                  <div
+                    className="w-[380px] h-20 rounded-[50%] blur-md"
+                    style={{
+                      background:
+                        "radial-gradient(ellipse 65% 50% at 50% 50%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 45%, transparent 80%)",
+                    }}
+                  />
+                </div>
+
+                {/* Coach Figure Asset */}
+                <div className="relative w-full h-[460px] md:h-[530px] animate-idle-breathe z-10">
+                  <Image
+                    src="/images/coach1.png"
+                    alt="UFC Head Coach Tyrone"
+                    fill
+                    priority
+                    className="object-contain object-bottom"
+                  />
+                </div>
+
+                {/* Coach Name Overlay */}
+                <div className="absolute bottom-4 right-2 z-20 text-right">
+                  <div className="font-teko font-black text-3xl md:text-4xl text-white tracking-wider uppercase leading-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+                    TYRONE "THE ANVIL"
+                  </div>
+                  <div className="text-[10px] font-black tracking-widest text-amber-400 uppercase drop-shadow-md">
+                    UFC PI STRIKING COACH
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
 
       {/* 5. EA Sports UFC Style Cinematic Arena Transition Overlay (Fade-In -> Peak -> Fade-Out) */}
       {arenaTransition.visible && (
