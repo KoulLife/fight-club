@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. 사용자 (파이터)
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  nickname    String
+  weightClass String?  @map("weight_class") // 페더급, 라이트급 등
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  fights Fight[]
+
+  @@map("users")
+}
+
+// 2. 경기 (대목표/프로젝트)
+model Fight {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  opponent  String?  // 가상의 상대 (나태함, 시험 등)
+  fightDate DateTime @map("fight_date") // 시합 D-Day
+  status    String   @default("SCHEDULED") // SCHEDULED, IN_CAMP, COMPLETED, CANCELLED
+  result    String?  // WIN, LOSS, NO_CONTEST
+  winType   String?  @map("win_type") // KO, DECISION, SUBMISSION 등
+  review    String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  camp          Camp?
+  coachAnalysis CoachAnalysis?
+
+  @@index([userId])
+  @@map("fights")
+}
+
+// 3. 파이트 캠프 (준비 기간)
+model Camp {
+  id              String   @id @default(uuid())
+  fightId         String   @unique @map("fight_id")
+  startDate       DateTime @map("start_date")
+  endDate         DateTime @map("end_date")
+  targetIntensity String?  @map("target_intensity")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  fight    Fight     @relation(fields: [fightId], references: [id], onDelete: Cascade)
+  workouts Workout[]
+
+  @@map("camps")
+}
+
+// 4. 훈련 항목 (To-Do List)
+model Workout {
+  id          String    @id @default(uuid())
+  campId      String    @map("camp_id")
+  taskName    String    @map("task_name")
+  targetDate  DateTime  @map("target_date")
+  category    String?   // STRIKING(집중작업), GRAPPLING(자료정리), CONDITIONING(체력관리) 등
+  isCompleted Boolean   @default(false) @map("is_completed")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  camp Camp @relation(fields: [campId], references: [id], onDelete: Cascade)
+
+  @@index([campId])
+  @@map("workouts")
+}
+
+// 5. AI 코치 분석 로그
+model CoachAnalysis {
+  id            String   @id @default(uuid())
+  fightId       String   @unique @map("fight_id")
+  priorityScore Int?     @map("priority_score") // 1~10 우선순위
+  estimatedDays Int?     @map("estimated_days") // 추천 캠프 일수
+  coachFeedback String?  @db.Text @map("coach_feedback") // 코치의 조언/한마디
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  fight Fight @relation(fields: [fightId], references: [id], onDelete: Cascade)
+
+  @@map("coach_analysis")
+}
