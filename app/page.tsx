@@ -3,6 +3,11 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { sounds } from "@/lib/sounds";
+import PromotionModal from "./components/PromotionModal";
+import HeadCoachModal from "./components/HeadCoachModal";
+import SocialMediaPhoneModal from "./components/SocialMediaPhoneModal";
+import UfcCalendarModal from "./components/UfcCalendarModal";
+import FocusTimerModal, { TimerTask } from "./components/FocusTimerModal";
 import {
   Volume2,
   VolumeX,
@@ -33,6 +38,8 @@ import {
   ShieldCheck,
   Target,
   Diamond,
+  Timer,
+  Users,
 } from "lucide-react";
 
 interface FightProject {
@@ -253,13 +260,54 @@ const COACH_DIALOGS: Record<string, CoachDialogNode> = {
 
 export default function CareerHubPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [activeTab, setActiveTab] = useState<"HOME" | "CAMP" | "FIGHTS" | "CAREER">("CAMP");
+  const [activeTab, setActiveTab] = useState<"HOME" | "CAMP" | "FIGHTS" | "CAREER">("HOME");
   const [isShaking, setIsShaking] = useState(false);
   const [punchFlash, setPunchFlash] = useState(false);
   const [fighterOutfit, setFighterOutfit] = useState<"MCGREGOR" | "TATTED" | "RASHGUARD">("MCGREGOR");
 
   // Active Modal State: null | "FIGHT" | "COACH" | "HISTORY" | "CALENDAR" | "EVOLUTION" | "SOCIAL" | "SETTINGS"
   const [activeModal, setActiveModal] = useState<string | null>(null);
+
+  // Focus Stopwatch & Interval Timer (시:분:초 집중 시간 타이머)
+  const [timerMode, setTimerMode] = useState<"INTERVAL" | "CARDIO">("INTERVAL");
+  const [focusSeconds, setFocusSeconds] = useState(0); // Cardio mode: elapsed seconds
+  const [intervalTotalSeconds, setIntervalTotalSeconds] = useState(25 * 60); // Interval mode: default 25 min
+  const [intervalSecondsLeft, setIntervalSecondsLeft] = useState(25 * 60); // Interval mode: remaining seconds
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [activeTimerTask, setActiveTimerTask] = useState<TimerTask | null>(null);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        if (timerMode === "INTERVAL") {
+          setIntervalSecondsLeft((prev) => {
+            if (prev <= 1) {
+              setIsTimerRunning(false);
+              sounds.playBell();
+              return 0;
+            }
+            return prev - 1;
+          });
+        } else {
+          setFocusSeconds((prev) => prev + 1);
+        }
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTimerRunning, timerMode]);
+
+  const formatFocusTime = (totalSecs: number, forceHours: boolean = false) => {
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    if (h > 0 || forceHours) {
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
 
   // Projects State (대단위 프로젝트)
   const [projects, setProjects] = useState<FightProject[]>([
@@ -526,6 +574,8 @@ export default function CareerHubPage() {
         ? "SYSTEM & AUDIO SETTINGS"
         : modalName === "SOCIAL"
         ? "FIGHT NEWS & SOCIAL BUZZ"
+        : modalName === "TIMER"
+        ? "OCTAGON FOCUS TIMER // 집중 훈련 세션"
         : "OCTAGON BROADCAST FEED";
 
     executeArenaTransition(label, () => {
@@ -675,24 +725,43 @@ export default function CareerHubPage() {
 
         {/* Status Metrics (Top Right HUD) */}
         <div className="flex items-center gap-3 text-xs font-semibold">
-          {/* Notifications */}
+          {/* Focus Stopwatch / Interval Timer (시:분:초 집중 시간) */}
           <div
-            onClick={() => openModal("COACH")}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-neutral-900/80 border border-white/10 text-neutral-300 cursor-pointer hover:border-red-500 transition-colors"
-            title="코치 메시지"
+            onClick={() => {
+              sounds.playSelect();
+              setActiveModal("TIMER");
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-neutral-900/80 border cursor-pointer select-none transition-all group hover:border-amber-400 ${
+              isTimerRunning
+                ? timerMode === "INTERVAL"
+                  ? "border-red-500/80 bg-red-950/25 text-red-400 shadow-[0_0_12px_rgba(239,68,68,0.3)]"
+                  : "border-amber-500/80 bg-amber-950/25 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+                : "border-white/10 text-neutral-300 hover:border-neutral-400"
+            }`}
+            title="파이트 집중 타이머 열기 (인터벌 / 카디오)"
           >
-            <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-            <span className="font-bold">250</span>
-          </div>
-
-          {/* XP / Points */}
-          <div
-            onClick={() => openModal("EVOLUTION")}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-neutral-900/80 border border-white/10 text-emerald-400 cursor-pointer hover:border-emerald-500 transition-colors"
-            title="파이터 진화 포인트"
-          >
-            <Activity className="w-3.5 h-3.5" />
-            <span className="font-bold font-teko text-sm tracking-wide">310.34M</span>
+            {timerMode === "INTERVAL" ? (
+              <Flame className={`w-3.5 h-3.5 ${isTimerRunning ? "text-red-400 animate-pulse" : "text-neutral-400 group-hover:text-red-400"}`} />
+            ) : (
+              <Timer className={`w-3.5 h-3.5 ${isTimerRunning ? "text-amber-400 animate-pulse" : "text-neutral-400 group-hover:text-amber-400"}`} />
+            )}
+            <span className="font-mono font-bold text-xs tracking-wider text-white">
+              {timerMode === "INTERVAL"
+                ? formatFocusTime(intervalSecondsLeft, true)
+                : formatFocusTime(focusSeconds, true)}
+            </span>
+            {isTimerRunning && (
+              <span
+                className={`w-1.5 h-1.5 rounded-full animate-ping ml-0.5 ${
+                  timerMode === "INTERVAL" ? "bg-red-400" : "bg-amber-400"
+                }`}
+              />
+            )}
+            {activeTimerTask && (
+              <span className="hidden xl:inline-block max-w-[110px] truncate text-[10px] text-neutral-400 font-normal pl-1 border-l border-white/10">
+                {activeTimerTask.title}
+              </span>
+            )}
           </div>
 
           {/* Calendar D-Day */}
@@ -705,10 +774,17 @@ export default function CareerHubPage() {
             <span className="font-bold">D-7</span>
           </div>
 
-          {/* Purse */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-neutral-900/80 border border-white/10 text-yellow-400">
-            <Award className="w-3.5 h-3.5" />
-            <span className="font-bold font-teko text-sm tracking-wide">$75M</span>
+          {/* Fan Count (글로벌 팬 수) */}
+          <div
+            onClick={() => {
+              sounds.playSelect();
+              openModal("SOCIAL");
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-neutral-900/80 border border-white/10 text-yellow-400 cursor-pointer hover:border-yellow-500 hover:bg-yellow-950/10 transition-colors"
+            title="글로벌 팬 수 (소셜 미디어 열기)"
+          >
+            <Users className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="font-bold font-teko text-sm tracking-wide">75.4M 팬</span>
           </div>
 
           {/* Sound Toggle */}
@@ -1676,66 +1752,15 @@ export default function CareerHubPage() {
         </div>
       )}
 
-      {/* MODAL 2: Head Coach Locker Room */}
+      {/* MODAL 2: EA Sports UFC Style Head Coach Modal */}
       {activeModal === "COACH" && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative w-full max-w-xl bg-[#0e1219] border border-amber-500/60 rounded-sm shadow-2xl overflow-hidden p-6 animate-fade-in">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-amber-400" />
-                <h3 className="text-xl font-black font-teko uppercase text-white tracking-wide">
-                  AI HEAD COACH LOCKER ROOM
-                </h3>
-              </div>
-              <button
-                onClick={closeModal}
-                className="p-1 rounded bg-neutral-800 hover:bg-amber-600 text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-4 p-3 bg-black/60 rounded border border-white/10">
-                <div className="relative w-16 h-16 rounded overflow-hidden shrink-0 border border-amber-500/40">
-                  <Image
-                    src="/images/card_coach.jpg"
-                    alt="Coach"
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <div>
-                  <div className="text-sm font-black uppercase text-white font-teko tracking-wide">
-                    COACH "KNUCKLES" MACKENZIE
-                  </div>
-                  <div className="text-xs text-amber-400 font-medium">MMA 헤드코치 / 전략 진단관</div>
-                  <div className="text-[11px] text-neutral-400">캠프 성실도: 94% (최적 컨디션 유지 중)</div>
-                </div>
-              </div>
-
-              <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded text-xs text-neutral-200 leading-relaxed space-y-2">
-                <p className="font-bold text-amber-300">오늘의 코칭 브리핑:</p>
-                <p>
-                  "지금 시점에서 가장 경계해야 할 건 조급함이다. 남은 D-7 동안 새로운 걸 무리하게 벌리지 말고,
-                  스트라이킹(알고리즘) 기본 패턴을 손에 익히고 컨디셔닝 수면을 7시간 이상 확보해라."
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  onClick={() => {
-                    sounds.playSelect();
-                    closeModal();
-                  }}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs uppercase tracking-wider rounded-sm transition-colors"
-                >
-                  지시 사항 접수 완료
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <HeadCoachModal
+          onClose={closeModal}
+          onSelectFight={(boutId) => {
+            sounds.playPunch();
+            sounds.playBell();
+          }}
+        />
       )}
 
       {/* MODAL 4: Fight History Archive */}
@@ -1796,52 +1821,9 @@ export default function CareerHubPage() {
         </div>
       )}
 
-      {/* MODAL 5: Calendar Modal */}
+      {/* MODAL 5: UFC Broadcast Styled Interactive Calendar Modal */}
       {activeModal === "CALENDAR" && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative w-full max-w-xl bg-[#0e1219] border border-amber-500/60 rounded-sm shadow-2xl overflow-hidden p-6 animate-fade-in">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-amber-400" />
-                <h3 className="text-xl font-black font-teko uppercase text-white tracking-wide">
-                  FIGHT CAMP SCHEDULE & CALENDAR
-                </h3>
-              </div>
-              <button
-                onClick={closeModal}
-                className="p-1 rounded bg-neutral-800 hover:bg-neutral-600 text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="p-3 bg-red-950/30 border border-red-600/40 rounded flex items-center justify-between">
-                <div>
-                  <div className="text-red-400 font-bold uppercase">UFC MAIN EVENT FIGHT NIGHT</div>
-                  <div className="text-white font-bold text-sm">2026년 9월 21일 (D-7)</div>
-                </div>
-                <span className="px-2.5 py-1 bg-red-600 text-white font-bold rounded">시합일</span>
-              </div>
-
-              <div className="p-3 bg-neutral-900/80 border border-white/10 rounded space-y-2">
-                <div className="font-bold text-neutral-300">캠프 주간 일정:</div>
-                <div className="flex justify-between text-neutral-400 border-b border-white/5 pb-1">
-                  <span>D-5: 고강도 실전 스파링</span>
-                  <span className="text-amber-400">스트라이킹 스프린트</span>
-                </div>
-                <div className="flex justify-between text-neutral-400 border-b border-white/5 pb-1">
-                  <span>D-2: 공식 체중 계체량(Weigh-in)</span>
-                  <span className="text-emerald-400">컨디션 조율 & 감량 완료</span>
-                </div>
-                <div className="flex justify-between text-neutral-400">
-                  <span>D-Day: 옥타곤 입장</span>
-                  <span className="text-red-400 font-bold">승리 달성</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <UfcCalendarModal onClose={closeModal} />
       )}
 
       {/* MODAL 6: Fighter Evolution Modal */}
@@ -1894,37 +1876,9 @@ export default function CareerHubPage() {
         </div>
       )}
 
-      {/* MODAL 7: Social Media Modal */}
+      {/* MODAL 7: Smartphone X (Twitter) Social Media Feed */}
       {activeModal === "SOCIAL" && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative w-full max-w-md bg-[#0e1219] border border-white/20 rounded-sm shadow-2xl overflow-hidden p-6 animate-fade-in">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Share2 className="w-5 h-5 text-rose-500" />
-                <h3 className="text-xl font-black font-teko uppercase text-white tracking-wide">
-                  SOCIAL MEDIA // 팬 반응 & 화제성
-                </h3>
-              </div>
-              <button
-                onClick={closeModal}
-                className="p-1 rounded bg-neutral-800 hover:bg-neutral-600 text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="p-3 bg-black/60 rounded border border-white/10">
-                <div className="text-neutral-400 font-semibold mb-1">@mma_junkie</div>
-                <p className="text-neutral-200">"YOOYOO FERRARI의 33차 타이틀 방어전은 UFC 역사상 가장 위대한 순간이 될 것이다!"</p>
-              </div>
-              <div className="p-3 bg-black/60 rounded border border-white/10">
-                <div className="text-neutral-400 font-semibold mb-1">@dana_white_official</div>
-                <p className="text-neutral-200">"이 선수의 훈련 캠프 소화율은 100%다. 시합 당일 파이트머니 보너스가 기대된다."</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <SocialMediaPhoneModal onClose={closeModal} />
       )}
 
       {/* MODAL 8: Settings Modal */}
@@ -1975,72 +1929,47 @@ export default function CareerHubPage() {
         </div>
       )}
 
-      {/* MODAL 9: Promotion Modal */}
+      {/* MODAL 9: EA Sports UFC Style Promotions Invitation Modal */}
       {activeModal === "PROMOTION" && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative w-full max-w-lg bg-[#0e1219] border border-red-600/60 rounded-sm shadow-2xl overflow-hidden p-6 animate-fade-in">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Flame className="w-5 h-5 text-red-500" />
-                <h3 className="text-xl font-black font-teko uppercase text-white tracking-wide">
-                  FIGHT PROMOTION // 미디어 & 스폰서십
-                </h3>
-              </div>
-              <button
-                onClick={closeModal}
-                className="p-1 rounded bg-neutral-800 hover:bg-red-600 text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+        <PromotionModal
+          onClose={closeModal}
+          onAcceptContract={(org) => {
+            sounds.playPunch();
+            sounds.playBell();
+          }}
+        />
+      )}
 
-            <div className="space-y-3 text-xs">
-              <div className="p-3 bg-red-950/30 border border-red-600/40 rounded flex items-center justify-between">
-                <div>
-                  <span className="text-neutral-400 block font-semibold">CURRENT FIGHT HYPE</span>
-                  <span className="text-xl font-black font-teko text-white">9,631 HYPE (VERY HIGH)</span>
-                </div>
-                <span className="px-2.5 py-1 rounded bg-red-600 text-white font-bold text-[10px]">
-                  BOUT PAY: +25% BONUS
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                <div className="p-3 bg-neutral-900/80 rounded border border-white/10 flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-white">UFC 310 공식 프레스 컨퍼런스</div>
-                    <div className="text-neutral-400 text-[11px]">기자회견 설전으로 파이트 관심도 15% 상승</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      sounds.playSelect();
-                      closeModal();
-                    }}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] rounded uppercase"
-                  >
-                    진행 완료
-                  </button>
-                </div>
-
-                <div className="p-3 bg-neutral-900/80 rounded border border-white/10 flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-white">Venum 공식 스폰서 촬영</div>
-                    <div className="text-neutral-400 text-[11px]">스폰서십 파이트머니 $10,000 확보</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      sounds.playSelect();
-                      closeModal();
-                    }}
-                    className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-bold text-[10px] rounded uppercase"
-                  >
-                    체결됨
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* MODAL 10: UFC Focus Timer & Interval / Cardio Training Modal */}
+      {activeModal === "TIMER" && (
+        <FocusTimerModal
+          isOpen={true}
+          onClose={closeModal}
+          timerMode={timerMode}
+          setTimerMode={setTimerMode}
+          isTimerRunning={isTimerRunning}
+          setIsTimerRunning={setIsTimerRunning}
+          intervalTotalSeconds={intervalTotalSeconds}
+          setIntervalTotalSeconds={setIntervalTotalSeconds}
+          intervalSecondsLeft={intervalSecondsLeft}
+          setIntervalSecondsLeft={setIntervalSecondsLeft}
+          cardioSeconds={focusSeconds}
+          setCardioSeconds={setFocusSeconds}
+          activeTask={activeTimerTask}
+          setActiveTask={setActiveTimerTask}
+          workouts={workouts}
+          onToggleWorkout={handleToggleWorkout}
+          onAddWorkout={(title) => {
+            const newItem: WorkoutItem = {
+              id: `w-${Date.now()}`,
+              projectId: projects[0]?.id || "proj-1",
+              category: "STAND-UP",
+              title,
+              completed: false,
+            };
+            setWorkouts((prev) => [newItem, ...prev]);
+          }}
+        />
       )}
 
       {/* NEW FIGHT PROJECT MODAL (새 경기/프로젝트 등록 모달) */}
